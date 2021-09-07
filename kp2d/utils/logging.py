@@ -63,20 +63,6 @@ class SummaryWriter:
         assert img_tensor.max() <= 1.0
         assert (isinstance(img_tensor, torch.Tensor) and img_tensor.device == torch.device(
             'cpu')) or isinstance(img_tensor, np.ndarray)
-        if self.log_wb:
-            caption = tag
-            if isinstance(img_tensor, torch.Tensor):
-                # shape: (C, H, W)
-                size = tuple(img_tensor.shape[-2:][::-1])
-                assert img_tensor.shape[0] == 1 or img_tensor.shape[0] == 3, \
-                    'Expects CHW with C=1 or 3, provided {}'.format(img_tensor.shape)
-                self.wb_logger.log_tensor_image(img_tensor * 255, tag, caption, size=size, now=False)
-            else:
-                # shape: (H, W, C)
-                size = tuple(img_tensor.shape[:2][::-1])
-                assert img_tensor.shape[-1] == 1 or img_tensor.shape[-1] == 3, \
-                    'Expects HWC with C=1 or 3, provided {}'.format(img_tensor.shape)
-                self.wb_logger.log_numpy_image((img_tensor * 255).astype(np.uint8), tag, caption, size=size, now=False)
 
     def commit_log(self):
         if self.log_wb and self._global_step >= 0:

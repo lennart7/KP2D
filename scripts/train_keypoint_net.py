@@ -8,6 +8,7 @@ import numpy as np
 import torch
 import torch.optim as optim
 import torchvision.transforms as transforms
+from torch.utils.tensorboard import SummaryWriter as TorchSummaryWriter
 from torch.utils.data import ConcatDataset, DataLoader
 from tqdm import tqdm
 
@@ -93,6 +94,12 @@ def main(file):
     optimizer = optim.Adam(model.optim_params)
     compression = hvd.Compression.none  # or hvd.Compression.fp16
     optimizer = hvd.DistributedOptimizer(optimizer, named_parameters=model.named_parameters(), compression=compression)
+    checkpoint = None
+    if config.pretrained_model:
+        print(f"Loading pretrained model! {config.pretrained_model}")
+        checkpoint = torch.load(config.pretrained_model)
+        model.load_state_dict(checkpoint['state_dict'])
+        optimizer.load_state_dict(checkpoint['optimizer_state_dict'])
 
     # Synchronize model weights from all ranks
     hvd.broadcast_parameters(model.state_dict(), root_rank=0)
@@ -111,7 +118,7 @@ def main(file):
                                     mode=os.getenv('WANDB_MODE', 'run'))
             config.model.checkpoint_path = os.path.join(config.model.checkpoint_path, summary.run_name)
         else:
-            summary = None
+            summary = TorchSummaryWriter(log_path)
             date_time = datetime.now().strftime("%m_%d_%Y__%H_%M_%S")
             date_time = model_submodule(model).__class__.__name__ + '_' + date_time
             config.model.checkpoint_path = os.path.join(config.model.checkpoint_path, date_time)
@@ -122,19 +129,22 @@ def main(file):
         summary = None
 
     # Initial evaluation
-    evaluation(config, 0, model, summary)
+    # evaluation(config, 0, model, summary, optimizer)
     # Train
-    for epoch in range(config.arch.epochs):
+    epoch_start = 0
+    if checkpoint:
+        epoch_start = checkpoint["epoch"]
+    for epoch in range(epoch_start, config.arch.epochs):
         # train for one epoch (only log if eval to have aligned steps...)
         printcolor("\n--------------------------------------------------------------")
         train(config, train_loader, model, optimizer, epoch, summary)
 
         # Model checkpointing, eval, and logging
-        evaluation(config, epoch + 1, model, summary)
+        evaluation(config, epoch + 1, model, summary, optimizer)
     printcolor('Training complete, models saved in {}'.format(config.model.checkpoint_path), "green")
 
 
-def evaluation(config, completed_epoch, model, summary):
+def evaluation(config, completed_epoch, model, summary, optimizer):
     # Set to eval mode
     model.eval()
     model.training = False
@@ -183,8 +193,11 @@ def evaluation(config, completed_epoch, model, summary):
         printcolor('\nSaving model (epoch:{}) at {}'.format(completed_epoch, current_model_path), 'green')
         torch.save(
         {
-            'state_dict': model_submodule(model_submodule(model).keypoint_net).state_dict(),
-            'config': config
+            'state_dict': model_submodule(model).state_dict(),
+            'key_point_state_dict': model_submodule(model_submodule(model).keypoint_net).state_dict(),
+            'optimizer_state_dict': optimizer.state_dict(),
+            'config': config,
+            'epoch': completed_epoch,
         }, current_model_path)
 
 
@@ -250,7 +263,8 @@ def train(config, train_loader, model, optimizer, epoch, summary):
 
                     model(data_cuda, debug=True)
                     for k, v in model_submodule(model).vis.items():
-                        summary.add_image(k, v)
+                        pass
+                        # summary.add_image(k, v)
 
 
 if __name__ == '__main__':

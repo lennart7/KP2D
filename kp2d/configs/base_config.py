@@ -57,6 +57,7 @@ cfg.model.params.do_upsample = True                         # Upsample descripto
 cfg.model.params.do_cross = True                            # Use cross-border keypoints
 cfg.model.params.descriptor_loss = True                     # Use hardest negative mining descriptor loss
 cfg.model.params.keypoint_net_type = 'KeypointNet'          # Type of keypoint network. Supported ['KeypointNet', 'KeypointResnet']
+cfg.pretrained_model = None
 ########################################################################################################################
 ### DATASETS
 ########################################################################################################################
@@ -72,7 +73,7 @@ cfg.datasets.augmentation.jittering = (0.5, 0.5, 0.2, 0.05)     # Color jitterin
 ########################################################################################################################
 cfg.datasets.train = CN()
 cfg.datasets.train.batch_size = 8                                      # Training batch size
-cfg.datasets.train.num_workers = 16                                    # Training number of workers
+cfg.datasets.train.num_workers = 16                                  # Training number of workers
 cfg.datasets.train.path = '/data/datasets/kp2d/coco/train2017/'        # Training data path (COCO dataset)
 cfg.datasets.train.repeat = 1                                          # Number of times training dataset is repeated per epoch
 ########################################################################################################################

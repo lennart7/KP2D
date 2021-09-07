@@ -95,7 +95,7 @@ RUN ldconfig /usr/local/cuda/targets/x86_64-linux/lib/stubs && \
     ldconfig
 
 
-RUN pip install awscli wandb tensorboardx tqdm termcolor path.py pillow opencv-python-headless matplotlib jupyter boto3 pycuda
+RUN pip install awscli wandb tensorboardx tensorboard tqdm termcolor path.py pillow opencv-python-headless matplotlib jupyter boto3 pycuda
 RUN pip install cython==0.29.10 yacs
 
 # Configure environment variables - default working directory is "/workspace"

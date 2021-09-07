@@ -13,11 +13,13 @@ model:
         do_upsample: True
         do_cross: True
         descriptor_loss: True
-
+arch:
+    epochs: 60 # 50 from original, then 10 more
 datasets:
     train:
-        num_workers: 16                                  # Training number of workers
-        batch_size: 8
+        path: "/data/datasets/keypoint_export/"
+pretrained_model: "/data/experiments/kp2d/KeypointNetwithIOLoss_07_30_2021__08_33_21/model.ckpt"
+
 
 wandb:
     dry_run: True
