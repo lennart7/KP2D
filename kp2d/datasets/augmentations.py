@@ -72,6 +72,11 @@ def to_tensor_sample(sample, tensor_type='torch.FloatTensor'):
     sample : dict
         Sample with keys cast as tensors
     """
+    img = np.array(sample['image'])
+    if img.shape[-1] == 4:
+        # remove alpha transparency channel
+        img = img[:, :, :3]
+        sample['image'] = img
     transform = transforms.ToTensor()
     sample['image'] = transform(sample['image']).type(tensor_type)
     return sample
@@ -83,7 +88,6 @@ def spatial_augment_sample(sample):
         transforms.RandomVerticalFlip(p=0.5),
         transforms.RandomHorizontalFlip(p=0.5),
         transforms.RandomAffine(15, translate=(0.1, 0.1), scale=(0.9, 1.1))
-        
     ])
     sample['image'] = augment_image(sample['image'])
 

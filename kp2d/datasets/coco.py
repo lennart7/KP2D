@@ -17,15 +17,20 @@ class COCOLoader(Dataset):
     data_transform : Function
         Transformations applied to the sample
     """
-    def __init__(self, root_dir, data_transform=None):
 
+    def __init__(self, root_dir, data_transform=None):
         super().__init__()
         self.root_dir = root_dir
 
-        self.files=[]
+        self.files = []
 
-        for filename in glob.glob(root_dir + '/*.jpg'):
-            self.files.append(filename)
+        if "keypoint_synthetic" in root_dir:
+            for filename in glob.glob(root_dir + '/*.png'):
+                if "rgb" in filename:
+                    self.files.append(filename)
+        else:
+            for filename in glob.glob(root_dir + '/*.jpg'):
+                self.files.append(filename)
         self.data_transform = data_transform
 
     def __len__(self):
