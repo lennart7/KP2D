@@ -105,9 +105,12 @@ def main(file):
     hvd.broadcast_parameters(model.state_dict(), root_rank=0)
 
     # checkpoint model
+    date_time = datetime.now().strftime("%m_%d_%Y__%H_%M_%S")
+    date_time = model_submodule(model).__class__.__name__ + '_' + date_time
+    config.model.checkpoint_path = os.path.join(config.model.checkpoint_path, date_time)
     log_path = os.path.join(config.model.checkpoint_path, 'logs')
     os.makedirs(log_path, exist_ok=True)
-    
+
     if rank() == 0:
         if not config.wandb.dry_run:
             summary = SummaryWriter(log_path,
@@ -119,10 +122,7 @@ def main(file):
             config.model.checkpoint_path = os.path.join(config.model.checkpoint_path, summary.run_name)
         else:
             summary = TorchSummaryWriter(log_path)
-            date_time = datetime.now().strftime("%m_%d_%Y__%H_%M_%S")
-            date_time = model_submodule(model).__class__.__name__ + '_' + date_time
-            config.model.checkpoint_path = os.path.join(config.model.checkpoint_path, date_time)
-        
+
         print('Saving models at {}'.format(config.model.checkpoint_path))
         os.makedirs(config.model.checkpoint_path, exist_ok=True)    
     else:

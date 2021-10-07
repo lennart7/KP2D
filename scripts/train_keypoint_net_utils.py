@@ -64,6 +64,7 @@ def setup_datasets_and_dataloaders(config):
         _set_seeds(42 + worker_id)
 
     data_transforms = image_transforms(shape=config.augmentation.image_shape, jittering=config.augmentation.jittering)
+    print("Loading dataset:", config.train.path)
     train_dataset = COCOLoader(config.train.path, data_transform=data_transforms['train'])
     # Concatenate dataset to produce a larger one
     if config.train.repeat > 1:

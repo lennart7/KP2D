@@ -13,8 +13,10 @@ model:
         do_upsample: True
         do_cross: True
         descriptor_loss: True
+    scheduler:
+        lr_epoch_divide_frequency: 20  # normal is 40. exponential decay
 arch:
-    epochs: 60 # 50 from original, then 10 more
+    epochs: 100 # 50 from original, then 10 more
 datasets:
     train:
         path: "/data/datasets/keypoint_export/"

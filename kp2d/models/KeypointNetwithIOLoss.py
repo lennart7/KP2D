@@ -336,10 +336,14 @@ class KeypointNetwithIOLoss(torch.nn.Module):
                 source_feat_topk = source_feat_topk.div(torch.norm(source_feat_topk, p=2, dim=1).unsqueeze(1))
                 target_feat_topk = target_feat_topk.div(torch.norm(target_feat_topk, p=2, dim=1).unsqueeze(1))
 
-                dmat = torch.bmm(source_feat_topk.permute(0,2,1), target_feat_topk)
-                dmat = torch.sqrt(2 - 2 * torch.clamp(dmat, min=-1, max=1))
-                dmat_soft_min = torch.sum(dmat* dmat.mul(-1).softmax(dim=2), dim=2)
-                dmat_min, dmat_min_indice = torch.min(dmat, dim=2)
+                try:
+                    dmat = torch.bmm(source_feat_topk.permute(0,2,1), target_feat_topk)
+                    dmat = torch.sqrt(2 - 2 * torch.clamp(dmat, min=-1, max=1))
+                    dmat_soft_min = torch.sum(dmat* dmat.mul(-1).softmax(dim=2), dim=2)
+                    dmat_min, dmat_min_indice = torch.min(dmat, dim=2)
+                except RuntimeError as e:
+                    print(data['filename'])
+                    raise e
 
                 target_uv_norm_topk_associated = target_uv_norm_topk.gather(1, dmat_min_indice.unsqueeze(2).repeat(1,1,2))
                 point_pair = torch.cat([source_uv_norm_topk, target_uv_norm_topk_associated, dmat_min.unsqueeze(2)], 2)

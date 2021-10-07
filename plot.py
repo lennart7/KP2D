@@ -1,17 +1,17 @@
 import os
 import argparse
-from itertools import combinations
 
 import cv2
+from cv2.xfeatures2d import matchGMS
 import numpy as np
 import torch
 from PIL import Image
 
 from kp2d.models.KeypointNetwithIOLoss import KeypointNetwithIOLoss
-from kp2d.datasets.augmentations import (ha_augment_sample, resize_sample,
-                                         spatial_augment_sample,
+from kp2d.datasets.augmentations import (resize_sample,
                                          to_tensor_sample)
 DETECTION_THRESH = 0.5
+TOP_N = 1000
 
 
 def main():
@@ -24,7 +24,6 @@ def main():
     args = parser.parse_args()
     checkpoint = torch.load(args.pretrained_model)
     model_args = checkpoint['config']['model']['params']
-    files = os.listdir(args.input_dir)
 
     params = dict(use_color=True, do_upsample=True, do_cross=True)
 
@@ -44,12 +43,18 @@ def main():
     params = {'res': (480, 640), 'top_k': 1000, }
 
     # for index, (f1, f2) in enumerate(combinations(files, 2)):
-    f1 = "00000000_rgb.png"
-    f2 = "00000000_rgb_L.png"
+    # CARLA SYNTHETIC EVAL
+    f1 = "00000000_rgb_top_far.png"
+    f2 = "00000000_rgb_top_far_far.png"
+    # f1 = "00000000_rgb.png"
+    # f2 = "00000000_rgb_L.png"
+    # ATLAS IMAGES
+    # f1 = "2cn03_0000000330_color.jpg"
+    # f2 = "3cn04_0000000330_color.jpg"
     print(f"Detecting keypoints for: {f1} - {f2}")
     with torch.no_grad():
         # for params in eval_params:
-        image_1, raw_image_1 = read_rgb_file(os.path.join(args.input_dir, f1), params['res'])
+        image_1, raw_image_1 = read_rgb_file(os.path.join(args.input_dir, f1), params['res'], warp=False)
         image_2, raw_image_2 = read_rgb_file(os.path.join(args.input_dir, f2), params['res'])
 
         sample = torch.stack([image_1, image_2])
@@ -75,12 +80,13 @@ def main():
         # transform into cv2.keypoints
         kp1 = []
         kp2 = []
+        print(f"{Hc * Wc} keypoints generated")
         for i in range(Hc * Wc):
             x, y = coord1[:, i]
-            kp = cv2.KeyPoint(x, y, 5)
+            kp = cv2.KeyPoint(x, y, 5, response=score1[i])
             kp1.append(kp)
             x, y = coord2[:, i]
-            kp = cv2.KeyPoint(x, y, 5)
+            kp = cv2.KeyPoint(x, y, 5, response=score2[i])
             kp2.append(kp)
 
         # Initiate SIFT detector
@@ -92,29 +98,35 @@ def main():
 
         # kp1, des1 = sift.detectAndCompute(raw_image_1_gray, None)
         # kp2, des2 = sift.detectAndCompute(raw_image_2_gray, None)
-
+        MATCH_GMS = False
         bf = cv2.BFMatcher()
-        matches = bf.knnMatch(desc1.T, desc2.T, k=2)
-
-        good = []
-        for m, n in matches:
-            if m.distance < 0.75 * n.distance:
-                good.append([m])
+        if MATCH_GMS:
+            raw_matches = bf.match(desc1.T, desc2.T)
+            matches = matchGMS([Wc, Hc], [Wc, Hc], kp1, kp2, raw_matches,
+                               withScale=True, withRotation=True, thresholdFactor=0.01)
+        else:
+            raw_matches = bf.knnMatch(desc1.T, desc2.T, k=2)
+            matches = []
+            for m, n in raw_matches:
+                if m.distance < 0.75 * n.distance:
+                    matches.append(m)
+            # ratio test for filtering outliers
 
         # Apply ratio test
         good = []
-        for idx, (m, n) in enumerate(matches):
-            if m.distance < 0.75 * n.distance and \
-                    score1[idx] > DETECTION_THRESH and score2[idx] > DETECTION_THRESH:
-                dist = np.linalg.norm(desc1.T[m.queryIdx] - desc2.T[m.trainIdx])
-                print(f"Keypoint detected {m.queryIdx} - {m.trainIdx} with {dist:.2f}")
-                good.append([m])
+        for match in matches:
+            dist = np.linalg.norm(desc1.T[match.queryIdx] - desc2.T[match.trainIdx])
+            s1 = score1[match.queryIdx]
+            s2 = score2[match.trainIdx]
+            print(f"Match found {match.queryIdx} - {match.trainIdx} with {dist:.2f}, score1: {s1}, score2: {s2}")
+            if s1 > DETECTION_THRESH and s2 > DETECTION_THRESH:
+                good.append([match])
 
         print(len(good), " matches detected")
-        # cv.drawMatchesKnn expects list of lists as matches.
 
-        img1 = cv2.drawKeypoints(raw_image_1, kp1, None)
-        img2 = cv2.drawKeypoints(raw_image_2, kp2, None)
+        # cv.drawMatchesKnn expects list of lists as matches.
+        img1 = cv2.drawKeypoints(raw_image_1, np.array(kp1)[np.flip(np.argsort(score1))][:TOP_N], None)
+        img2 = cv2.drawKeypoints(raw_image_2, np.array(kp2)[np.flip(np.argsort(score2))][:TOP_N], None)
         img = cv2.drawMatchesKnn(raw_image_1, kp1, raw_image_2,
                                  kp2, good, None, flags=cv2.DrawMatchesFlags_NOT_DRAW_SINGLE_POINTS)
         cv2.imwrite(f"match_{f1}_{f2}.jpg", img)
@@ -122,15 +134,33 @@ def main():
         cv2.imwrite(f"keypoints_{f2}.jpg", img2)
 
 
-def read_rgb_file(fpath, shape):
+def read_rgb_file(fpath, shape, warp=False):
     image = Image.open(fpath)
     sample = dict(image=image)
     sample = resize_sample(sample, image_shape=shape)
-    image = cv2.cvtColor(np.array(sample['image']), cv2.COLOR_BGR2RGB)
+    sample['image'] = np.array(sample['image'])
+    if warp:
+        sample['image'] = warp_birds_eye(sample['image'])
+    image = cv2.cvtColor(sample['image'], cv2.COLOR_BGR2RGB)
     sample = to_tensor_sample(sample)
-
     return sample['image'].cuda(), image
+
+
+def warp_birds_eye(image):
+    IMAGE_H, IMAGE_W, _ = image.shape
+
+    src = np.float32([[0, IMAGE_H], [IMAGE_W, IMAGE_H], [0, 0], [IMAGE_W, 0]])
+    dst = np.float32([[IMAGE_W / 2 - 50, IMAGE_H], [IMAGE_W / 2 + 50, IMAGE_H], [0, 0], [IMAGE_W, 0]])
+
+    M = cv2.getPerspectiveTransform(src, dst)  # The transformation matrix
+    # Minv = cv2.getPerspectiveTransform(dst, src)  # Inverse transformation
+
+    img = image[200:(200 + IMAGE_H), 0:IMAGE_W, ]
+    warped_img = cv2.warpPerspective(img, M, (IMAGE_W, IMAGE_H))
+
+    return warped_img
 
 
 if __name__ == "__main__":
     main()
+

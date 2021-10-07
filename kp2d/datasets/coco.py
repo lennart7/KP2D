@@ -24,8 +24,8 @@ class COCOLoader(Dataset):
 
         self.files = []
 
-        if "keypoint_synthetic" in root_dir:
-            for filename in glob.glob(root_dir + '/*.png'):
+        if "keypoint_synthetic" in root_dir or "Carla" in root_dir:
+            for filename in glob.glob(root_dir + '/**/*top*.png'):
                 if "rgb" in filename:
                     self.files.append(filename)
         else:
@@ -53,5 +53,7 @@ class COCOLoader(Dataset):
 
         if self.data_transform:
             sample = self.data_transform(sample)
+
+        sample['filename'] = filename
 
         return sample
